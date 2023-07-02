@@ -1,0 +1,239 @@
+---
+title: "ModeloEconometrico1"
+output: word_document
+---
+
+```{r}
+# Cargar el paquete readxl
+library(readxl)
+
+# Cargar el paquete plm
+library(plm)
+
+# Cargar el archivo con la variable dependiente
+datos <- read_excel("TFdifpob.xlsx")
+ 
+# Lista de nombres de variables a convertir a numérico
+variables_a_convertir <- c("Dif_pob", "Jobs_TT", "Banks_TT", "Shops_TT", "Hosp_TT", "Pharm_TT", "Docs_TT", "PrimS_TT", "SecS_TT", "Stats_TT", "Cine_TT", "emp/pob", "afi/pob")
+
+# Recorre cada variable en la lista y conviértela a numérico
+for (variable in variables_a_convertir) {
+  datos[[variable]] <- as.numeric(datos[[variable]])
+}
+```
+
+De esta forma ya tenemos la base de datos limpia para realizar los modelos.
+
+
+
+A continuación realizaremos el modelo con todas la variables de nuestra base de datos donde se tiene e tiempo total de acceso a algunos servicios y las variables que contemplan el dinamismo económico de las regiones como son el número de empresas y el número de afiliados por cada habitante.
+
+```{r}
+
+# Construir el modelo de datos de panel con todas la variables
+
+modelrandom <- plm(Dif_pob ~ Jobs_TT + Banks_TT + Shops_TT + Hosp_TT + Pharm_TT + Docs_TT + PrimS_TT + SecS_TT + Stats_TT + Cine_TT + emp.pob + afi.pob, data = datos, model = "random")
+modelpool <- plm(Dif_pob ~ Jobs_TT + Banks_TT + Shops_TT + Hosp_TT + Pharm_TT + Docs_TT + PrimS_TT + SecS_TT + Stats_TT + Cine_TT + emp.pob + afi.pob, data = datos, model = "pooling")
+modelwithin <- plm(Dif_pob ~ Jobs_TT + Banks_TT + Shops_TT + Hosp_TT + Pharm_TT + Docs_TT + PrimS_TT + SecS_TT + Stats_TT + Cine_TT + emp.pob + afi.pob, data = datos, model = "within")
+
+pFtest(modelwithin,modelpool)
+# Contraste de homogeneidad p-value = 1 aceptamos hipótesis nula no hay diferencias entre individuos. No debemos tener en cuenta los efectos individuales
+# Por tanto es mejor el modelo pool de datos (mostrar ecuación)
+# No es necesario el contrate Hausman para elegir entre aleatorios o efectos fijos
+
+summary(modelpool)
+```
+Ninguna variable es significativa, ninguna mejor a 0.05.
+Cuando todos los valores son 0 se espera que sea -11, por lo que baja la población
+Afectan algo positivamente Jobs_TT, Shops_TT, Docs_TT, Cine_TT, afi.pob
+Afectan más positivamente Banks_TT, Hosp_TT, SecS_TT
+Afectan algo negativamente emp.pob
+Afectan más negativamente Pharm_TT, PrimS_TT, Stats_TT
+Este modelo de forma conjunta no explica los datos p-value: 0.868 
+
+
+```{r}
+# Solo con las variables que han sido positivas antes
+modelrandom <- plm(Dif_pob ~ Jobs_TT + Banks_TT + Shops_TT + Hosp_TT + Docs_TT + SecS_TT+ Cine_TT + afi.pob, data = datos, model = "random")
+modelpool <- plm(Dif_pob ~ Jobs_TT + Banks_TT + Shops_TT + Hosp_TT + Docs_TT + SecS_TT + Cine_TT + afi.pob, data = datos, model = "pooling")
+modelwithin <- plm(Dif_pob ~ Jobs_TT + Banks_TT + Shops_TT + Hosp_TT + Docs_TT + SecS_TT + Cine_TT + afi.pob, data = datos, model = "within")
+
+pFtest(modelwithin,modelpool)
+# Contraste de homogeneidad p-value = 1 aceptamos hipótesis nula no hay diferencias entre individuos. No debemos tener en cuenta los efectos individuales
+# Por tanto es mejor el modelo pool de datos (mostrar ecuación)
+# No es necesario el contrate Hausman para elegir entre aleatorios o efectos fijos
+
+summary(modelpool)
+```
+
+Intercept -50 de población cuando todas las variables rondan el 0
+No es un buen modelo explicativo p-value: 0.98173
+
+
+```{r}
+# Posibles lógicas
+modelrandom <- plm(Dif_pob ~ Jobs_TT + Shops_TT + PrimS_TT + emp.pob + afi.pob, data = datos, model = "random")
+modelpool <- plm(Dif_pob ~ Jobs_TT + Shops_TT + PrimS_TT + emp.pob + afi.pob, data = datos, model = "pooling")
+modelwithin <- plm(Dif_pob ~ Jobs_TT + Shops_TT + PrimS_TT + emp.pob + afi.pob, data = datos, model = "within")
+
+pFtest(modelwithin,modelpool)
+# Contraste de homogeneidad p-value = 1 aceptamos hipótesis nula no hay diferencias entre individuos. No debemos tener en cuenta los efectos individuales
+# Por tanto es mejor el modelo pool de datos (mostrar ecuación)
+# No es necesario el contrate Hausman para elegir entre aleatorios o efectos fijos
+
+summary(modelpool)
+```
+
+Intercept 17.
+
+
+```{r}
+# Las lógicas
+modelrandom <- plm(Dif_pob ~ Banks_TT + Hosp_TT + Pharm_TT + PrimS_TT + emp.pob + afi.pob, data = datos, model = "random")
+modelpool <- plm(Dif_pob ~ Banks_TT + Hosp_TT + Pharm_TT + PrimS_TT + emp.pob + afi.pob, data = datos, model = "pooling")
+modelwithin <- plm(Dif_pob ~ Banks_TT + Hosp_TT + Pharm_TT + PrimS_TT + emp.pob + afi.pob, data = datos, model = "within")
+
+pFtest(modelwithin,modelpool)
+# Contraste de homogeneidad p-value = 1 aceptamos hipótesis nula no hay diferencias entre individuos. No debemos tener en cuenta los efectos individuales
+# Por tanto es mejor el modelo pool de datos (mostrar ecuación)
+# No es necesario el contrate Hausman para elegir entre aleatorios o efectos fijos
+
+summary(modelpool)
+```
+
+Intercept 12
+
+```{r}
+#Según el análisis exploratorio de datos
+# Construir el modelo de datos de panel con todas la variables
+modelrandom <- plm(Dif_pob ~ Jobs_TT + emp.pob + afi.pob, data = datos, model = "random")
+modelpool <- plm(Dif_pob ~ Jobs_TT + emp.pob + afi.pob, data = datos, model = "pooling")
+modelwithin <- plm(Dif_pob ~ Jobs_TT + emp.pob + afi.pob, data = datos, model = "within")
+
+pFtest(modelwithin,modelpool)
+
+# Contraste de homogeneidad p-valor = 1 aceptamos hipótesis nula no hay diferencias entre individuos. No debemos tener en cuenta los efectos individuales
+# Por tanto es mejor el modelo pool de datos (mostrar ecuación)
+# No es necesario el contrate Hausman para elegir entre aleatorios o efectos fijos
+
+summary(modelpool)
+```
+Intercept 16
+p-valor 0'48, este modelo no es mejor que un modelo nulo or tanto no sirve para explicar los datos.
+
+
+
+```{r}
+library(plm)
+
+# Función para generar todas las combinaciones posibles de las variables independientes
+generate_combinations <- function(variables) {
+  n <- length(variables)
+  combinations <- list()
+  for (i in 1:n) {
+    comb <- combn(variables, i)
+    for (j in 1:ncol(comb)) {
+      combinations <- c(combinations, list(comb[, j]))
+    }
+  }
+  combinations
+}
+
+
+# Función para ajustar modelos y seleccionar el que tenga menor p-value
+select_best_model <- function(dependent_var, independent_vars, data) {
+  combinations <- generate_combinations(independent_vars)
+  num_combinations <- length(combinations)
+  p_values <- numeric(num_combinations)
+  
+  for (i in 1:num_combinations) {
+    comb_vars <- unlist(combinations[[i]])
+    formula <- as.formula(paste(dependent_var, "~", paste(comb_vars, collapse = "+")))
+    model <- plm(formula, data = data, model = "pooling")
+    p_values[i] <- coef(summary(model))[2, "Pr(>|t|)"]
+  }
+  
+  best_model_index <- which.min(p_values)
+  best_model <- combinations[[best_model_index]]
+  
+  result <- list(
+    best_model = best_model,
+    p_values = p_values
+  )
+  
+  return(result)
+}
+
+dependent_var <- "Dif_pob"
+independent_vars <- c("Jobs_TT", "Banks_TT", "Shops_TT", "Hosp_TT", "Pharm_TT", "Docs_TT", "PrimS_TT", "SecS_TT", "Stats_TT", "Cine_TT", "emp.pob", "afi.pob")
+
+best_model <- select_best_model(dependent_var, independent_vars, datos)
+
+# Imprimir el mejor modelo
+print(best_model$best_model)
+```
+La función generate_combinations genera todas las combinaciones posibles de las variables independientes. Recibe como argumento un vector de variables (variables) y devuelve una lista que contiene todas las combinaciones posibles de esas variables.
+
+La función select_best_model utiliza la función generate_combinations para obtener todas las combinaciones posibles de las variables independientes. Luego, ajusta un modelo de datos de panel utilizando cada combinación y calcula el p-value correspondiente para el coeficiente de la variable independiente en cada modelo.
+
+Después de calcular los p-values para todas las combinaciones, la función selecciona el modelo con el menor p-value y devuelve tanto el mejor modelo como un vector de p-values para todas las combinaciones.
+
+En resumen, la función select_best_model automatiza el proceso de ajustar diferentes modelos de datos de panel con diferentes combinaciones de variables independientes y selecciona el modelo con el menor p-value como el mejor modelo. Esto puede ayudar a identificar las variables independientes más relevantes en relación con la variable dependiente en el análisis de panel.
+
+Resultado: 
+
+```{r}
+modelpool <- plm(Dif_pob ~ Hosp_TT + Stats_TT, data = datos, model = "pooling")
+
+summary(modelpool)
+```
+
+No se llega a un p-valor alto, 0'15. 
+
+
+
+```{r}
+library(plm)
+library(lmtest)
+
+# Ajustar el modelo de pooling
+model_pool <- plm(Dif_pob ~ Jobs_TT + Banks_TT + Shops_TT + Hosp_TT + Pharm_TT + Docs_TT + PrimS_TT + SecS_TT + Stats_TT + Cine_TT + emp.pob + afi.pob, data = datos, model = "pooling")
+
+# Prueba de heteroscedasticidad
+hetero_test <- bptest(model_pool)
+
+# Imprimir los resultados
+print(hetero_test)
+
+
+```
+
+p-value = 0.9551: Es el valor p asociado al test. Indica la probabilidad de obtener un resultado igual o más extremo que el observado, asumiendo que la hipótesis nula de homoscedasticidad es verdadera.
+
+En base a estos resultados, no se encuentra evidencia suficiente para rechazar la hipótesis nula de homoscedasticidad. Un p-value alto (en este caso, 0.9551) indica que no hay suficiente evidencia para concluir que exista heteroscedasticidad en el modelo. Esto sugiere que la varianza del error no varía de manera sistemática con respecto a las variables explicativas en el modelo.
+
+
+
+
+Finalmente no podemos llear a una conclusión debido a que las combinaciones de variables independientes escogidas no llegan a un resultado significativo.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
