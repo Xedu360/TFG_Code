@@ -1,0 +1,405 @@
+---
+title: "ModeloEconometrico2"
+output: word_document
+---
+
+```{r}
+# Librerías
+library(readxl)
+library(plm)
+
+# Cargar el archivo con la variable dependiente
+datoss <- read_excel("TFdifrelpob.xlsx")
+  
+# Lista de nombres de variables a convertir a numérico
+variables_a_convertir <- c("Difrel_pob", "Jobs_TT", "Banks_TT", "Shops_TT", "Hosp_TT", "Pharm_TT", "Docs_TT", "PrimS_TT", "SecS_TT", "Stats_TT", "Cine_TT", "emp/pob", "afi/pob")
+
+# Recorre cada variable en la lista y conviértela a numérico
+for (variable in variables_a_convertir) {
+  datoss[[variable]] <- as.numeric(datoss[[variable]])
+}
+```
+
+De esta forma ya tenemos la base de datos limpia para realizar los modelos.
+
+
+
+A continuación realizaremos el modelo con todas la variables independientes de nuestra base de datos donde se tiene el tiempo total de acceso a algunos servicios básicos (como trbajos, bancos, tiendas, hospitales, famacias, doctores, escuelas primarias y secundarias, estaciones y cines) y las variables que contemplan el dinamismo económico de las regiones como son el número de empresas y el número de afiliados por cada habitante.
+Como variable dependiente tenemos la diferecia entre población porcentual que ha habido de un año a otro. De esta forma se puede medir con más rigurosidad qué servicios son prioritarios para las personas y las motivan a elegir la zona para vivir.
+
+
+
+En este caso vamos a realizar un modelo de datos de panel, ya que nuestra base de datos se compone de diferentes espacios temporales con varias variables recogidas en esos periodos de tiempo y con distintos individuos, en este caso municipios.
+
+```{r}
+# En primer lugar realizamos el modelo con todas las variables disponibles (modelo generalista) para tener una idea general de las relaciones entre las variables independientes con la dependiente.
+# Los posibles modelos para este tipo de casos son pool, efectos fijo o aleatorios. Para saber cuál es el adecuado para este caso se realiza el contraste de homogeneidad.
+
+modelrandom <- plm(Difrel_pob ~ Jobs_TT + Banks_TT + Shops_TT + Hosp_TT + Pharm_TT + Docs_TT + PrimS_TT + SecS_TT + Stats_TT + Cine_TT + emp.pob + afi.pob, data = datoss, model = "random")
+modelpool <- plm(Difrel_pob ~ Jobs_TT + Banks_TT + Shops_TT + Hosp_TT + Pharm_TT + Docs_TT + PrimS_TT + SecS_TT + Stats_TT + Cine_TT + emp.pob + afi.pob, data = datoss, model = "pooling")
+modelwithin <- plm(Difrel_pob ~ Jobs_TT + Banks_TT + Shops_TT + Hosp_TT + Pharm_TT + Docs_TT + PrimS_TT + SecS_TT + Stats_TT + Cine_TT + emp.pob + afi.pob, data = datoss, model = "within")
+
+pFtest(modelwithin,modelpool)
+```
+Contraste de homogeneidad p-value = 0.3142, aceptamos hipótesis nula lo que quiere decir que no hay diferencias entre individuos. 
+Por tanto, no debemos tener en cuenta los efectos individuales por lo que descartamos el contrate Hausman para elegir entre aleatorios o efectos fijos
+Es por ello que usaremos el modelo de pool de datos.
+
+```{r}
+summary(modelpool)
+```
+Los resultados de F-statistic p-value: < 2.22e-16 significa que este modelo explica mejor los datos que un modelo nulo, rechazamos la hipótesis nula.
+
+Los resultados más transcendentes son los que tienen un p-valor de 0. En este caso las variables más significativas son Jobs_TT y Docs_TT. Las variables afi.pob tienen un p.valor de 0'001 y Stats_TT de 0'05.
+
+De estas variables se deduce que cuando aumentan una unidad esta variable, y el resto de variables son nulas, el crecimiento de la población se ve afectado. Si es creciente o decreciente se deduce por el signo del valor Estimate. 
+En este caso cuando aumenta el tiempo de llegada a los trabajos y a las estaciones parece que decrece la población.
+Sin embargo, parece que el tiempo de llegada a los doctores la población crece, algo que no tiene mucho sentido.
+Por otro lado, si el número de afiliados a la seguridad social aumenta la población aumenta.
+
+También comentar que el Intercept no tiene un valor por debajo de 0.05 lo que muestra que no existe evidencia suficiente para creer que el valor medio de la variable dependiente difiere del 0 cuando las variables independientes se mantienen constantes.
+
+```{r}
+# Realizamos el modelo pool con las variables significativas del caso generalista anterior para observar si prevalecen en otras pruebas.
+
+modelpool <- plm(Difrel_pob ~ Jobs_TT + Docs_TT + Stats_TT + afi.pob, data = datoss, model = "pooling")
+
+summary(modelpool)
+```
+
+Comprobamos que efectivamente este modelo es explicativo y que todas las variables independientes son significativas con la misma tendencia que el modelo anterior.
+Sin embargo vuelve a ocurrir que la aportación en la población es muy pequeña, la más alta en términos absolutos es -0'21.
+También comentar que el Intercept tiene un valor por debajo de 0.05 lo que muestra que existe evidencia suficiente para creer que el valor medio de la variable dependiente difiere del 0 cuando las variables independientes se mantienen constantes, en este caso aumenta la población.
+
+
+```{r}
+# Las variables significativas más lógicas a priori
+# Teniendo como premisa que las farmacias y escuelas son de alta prioridad, de medias los médicos y bancos, de baja los hospitales, y teniendo en cuenta las variables relacionas con el dinamismo económico.
+
+modelpool <- plm(Difrel_pob ~ Pharm_TT + PrimS_TT + SecS_TT + Banks_TT + Hosp_TT + emp.pob + afi.pob, data = datoss, model = "pooling")
+
+summary(modelpool)
+```
+
+Este modelo tiene un p-valor por debajo de 0'05 lo que quiere decir que es explicativo.
+Además vemos como los afiliados a la seguridad social tiene un valor significativo, ya que su P-valor es de 0, y su Estimate es positivo.
+Por otro lado el tiempo de llegada a los hospitales tiene un P-valor de 0'001 y cuando aumenta su tiempo de acceso disminuye la población.
+El tiempo de acceso a las farmacias también es significativo, pues su P-valor es de 0'01 y tiene un Estimate negativo.
+Por último, el número de empresas es significativo con un P-valor de 0'05 y parece que a mayor número menor crece la población. Algo que no parece tener mucho sentido, al contrario que el resto de resultados.
+
+
+
+```{r}
+#Según el análisis exploratorio de datos, no arroja nada en claro todos los resultados son demasiado bajos en las relaciones con la varible dependiente.
+
+modelpool <- plm(Difrel_pob ~ Jobs_TT + Banks_TT + Hosp_TT + afi.pob, data = datoss, model = "pooling")
+
+summary(modelpool)
+```
+
+Se ha tenido en cuenta Jobs, Hosp, Banks y afiliados pues en el heat map de p-valores tenían los números más altos.
+
+En este caso parece que todos son significativos salvo los hospitales. Además corresponden a la idea racional de que a más distancia a bancos o a los empleos habrá un crecimiento negativo, y positivo si hay una alto número de afiliados a la seguridad social.
+
+```{r}
+# Función para generar todas las combinaciones posibles de las variables independientes
+generate_combinations <- function(variables) {
+  n <- length(variables)
+  combinations <- list()
+  for (i in 1:n) {
+    comb <- combn(variables, i)
+    for (j in 1:ncol(comb)) {
+      combinations <- c(combinations, list(comb[, j]))
+    }
+  }
+  combinations
+}
+
+
+# Función para ajustar modelos y seleccionar el que tenga menor p-value
+select_best_model <- function(dependent_var, independent_vars, data) {
+  combinations <- generate_combinations(independent_vars)
+  num_combinations <- length(combinations)
+  p_values <- numeric(num_combinations)
+  
+  for (i in 1:num_combinations) {
+    comb_vars <- unlist(combinations[[i]])
+    formula <- as.formula(paste(dependent_var, "~", paste(comb_vars, collapse = "+")))
+    model <- plm(formula, data = data, model = "pooling")
+    p_values[i] <- coef(summary(model))[2, "Pr(>|t|)"]
+  }
+  
+  best_model_index <- which.min(p_values)
+  best_model <- combinations[[best_model_index]]
+  
+  result <- list(
+    best_model = best_model,
+    p_values = p_values
+  )
+  
+  return(result)
+}
+
+
+dependent_var <- "Difrel_pob"
+independent_vars <- c("Jobs_TT", "Banks_TT", "Shops_TT", "Hosp_TT", "Pharm_TT", "Docs_TT", "PrimS_TT", "SecS_TT", "Stats_TT", "Cine_TT", "emp.pob", "afi.pob")
+
+best_model <- select_best_model(dependent_var, independent_vars, datoss)
+
+# Imprimir el mejor modelo
+print(best_model$best_model)
+```
+La función generate_combinations genera todas las combinaciones posibles de las variables independientes. Recibe como argumento un vector de variables (variables) y devuelve una lista que contiene todas las combinaciones posibles de esas variables.
+
+La función select_best_model utiliza la función generate_combinations para obtener todas las combinaciones posibles de las variables independientes. Luego, ajusta un modelo de datos de panel utilizando cada combinación y calcula el p-value correspondiente para el coeficiente de la variable independiente en cada modelo.
+
+Después de calcular los p-values para todas las combinaciones, la función selecciona el modelo con el menor p-value y devuelve tanto el mejor modelo como un vector de p-values para todas las combinaciones.
+
+En resumen, la función select_best_model automatiza el proceso de ajustar diferentes modelos de datos de panel con diferentes combinaciones de variables independientes y selecciona el modelo con el menor p-value como el mejor modelo. Esto puede ayudar a identificar las variables independientes más relevantes en relación con la variable dependiente en el análisis de panel.
+
+
+```{r}
+modelpool <- plm(Difrel_pob ~ Docs_TT + Hosp_TT, data = datoss, model = "pooling")
+
+summary(modelpool)
+```
+Los resultados del modelo a partir de las variables seleccionadas en el modelo con menor p-valor de todas las posibles combinaciones, donde el P-valor del modelo es p-value: < 2.22e-16, como otros que hemos visto anteriormente.
+En este caso el modelo es explicativo y tiene como variables significativas DocS_TT y Hosp_TT.
+En el caso de los doctores es positiva (0'16) y el caso de los hospitales (-0.3).
+
+
+
+```{r}
+# El modelo con más significativos
+
+# Función para generar todas las combinaciones posibles de las variables independientes
+generate_combinations <- function(variables) {
+  n <- length(variables)
+  combinations <- list()
+  for (i in 1:n) {
+    comb <- combn(variables, i)
+    for (j in 1:ncol(comb)) {
+      combinations <- c(combinations, list(comb[, j]))
+    }
+  }
+  combinations
+}
+
+
+select_most_sign <- function(dependent_var, independent_vars, data) {
+  combinations <- generate_combinations(independent_vars)
+  num_combinations <- length(combinations)
+  num_variables <- sapply(combinations, length)
+  p_values <- numeric(num_combinations)
+  
+  for (i in 1:num_combinations) {
+    comb_vars <- unlist(combinations[[i]])
+    formula <- as.formula(paste(dependent_var, "~", paste(comb_vars, collapse = "+")))
+    model <- plm(formula, data = data, model = "pooling")
+    p_values[i] <- sum(coef(summary(model))[,"Pr(>|t|)"] < 0.05)
+  }
+  
+  best_model_index <- which.max(p_values)
+  best_model <- combinations[[best_model_index]]
+  
+  result <- list(
+    best_model = best_model,
+    p_values = p_values
+  )
+  
+  return(result)
+}
+
+
+dependent_var <- "Difrel_pob"
+independent_vars <- c("Jobs_TT", "Banks_TT", "Shops_TT", "Hosp_TT", "Pharm_TT", "Docs_TT", "PrimS_TT", "SecS_TT", "Stats_TT", "Cine_TT", "emp.pob", "afi.pob")
+
+best_model <- select_most_sign(dependent_var, independent_vars, datoss)
+
+# Imprimir el mejor modelo
+print(best_model$best_model)
+```
+
+Este código muestra el modelo que más variables significativas tiene, para así crear un modelo con estas variables independientes para comprender mejor las relaciones.
+
+```{r}
+modelpool <- plm(Difrel_pob ~ Jobs_TT + Banks_TT + Docs_TT + SecS_TT + Stats_TT, data = datoss, model = "pooling")
+
+summary(modelpool)
+```
+
+También comentar que el Intercept tiene un valor por debajo de 0.05 lo que muestra que existe evidencia suficiente para creer que el valor medio de la variable dependiente difiere del 0 cuando las variables independientes se mantienen constantes, en este caso aumenta la población.
+En este caso el modelo a que más variables significativas tiene tiene el Intercept positivo al igual que las 5 variables independientes.
+
+
+En valor positivo se encuentra en los doctores.
+En valor negativo los trabajos, bancos, escuelas secundarias y estaciones.
+Lo que se extrae de estos valores es que se prioriza los trabajos, bancos, escuelas secundarias y estaciones.
+
+
+```{r}
+# Numero total significativos por variable
+generate_combinations <- function(variables) {
+  n <- length(variables)
+  combinations <- list()
+  for (i in 1:n) {
+    comb <- combn(variables, i)
+    for (j in 1:ncol(comb)) {
+      combinations <- c(combinations, list(comb[, j]))
+    }
+  }
+  combinations
+}
+
+count_significant_vars <- function(dependent_var, independent_vars, data) {
+  combinations <- generate_combinations(independent_vars)
+  num_combinations <- length(combinations)
+  
+  result <- data.frame(variable = character(), count = numeric(), stringsAsFactors = FALSE)
+  
+  for (i in 1:num_combinations) {
+    comb_vars <- unlist(combinations[[i]])
+    formula <- as.formula(paste(dependent_var, "~", paste(comb_vars, collapse = "+")))
+    model <- plm(formula, data = data, model = "pooling")
+    p_values <- coef(summary(model))[, "Pr(>|t|)"]
+    
+    for (j in 1:length(comb_vars)) {
+      if (p_values[comb_vars[j]] < 0.05) {
+        if (comb_vars[j] %in% result$variable) {
+          result$count[result$variable == comb_vars[j]] <- result$count[result$variable == comb_vars[j]] + 1
+        } else {
+          result <- rbind(result, data.frame(variable = comb_vars[j], count = 1, stringsAsFactors = FALSE))
+        }
+      }
+    }
+  }
+  
+  # Comprobar y agregar variables faltantes con count 0
+  missing_vars <- setdiff(independent_vars, result$variable)
+  if (length(missing_vars) > 0) {
+    result <- rbind(result, data.frame(variable = missing_vars, count = 0, stringsAsFactors = FALSE))
+  }
+  
+  # Ordenar el resultado de mayor a menor count
+  result <- result[order(result$count, decreasing = TRUE), ]
+  return(result)
+}
+
+dependent_var <- "Difrel_pob"
+independent_vars <- c("Jobs_TT", "Banks_TT", "Shops_TT", "Hosp_TT", "Pharm_TT", "Docs_TT", "PrimS_TT", "SecS_TT", "Stats_TT", "Cine_TT", "emp.pob", "afi.pob")
+
+
+summary <- count_significant_vars(dependent_var, independent_vars, datoss)
+
+# Imprimir el resumen
+print(summary)
+
+```
+
+Encontramos el número de veces que una variable ha sido significativa para el modelo. De esta forma se intenta medir la importancia de cada variable en estes modelo de panel de datos.
+
+La variable que más veces ha expicado la variable dependiente es afiliados a la seguridad social por población, doctores, trabajo, estaciones, farmacias y bancos.
+Las variables que han sido explicativas menos de 1000 veces son hospitales, cines, escuela secundaria, tiendas, escuelas primarias y empresas por población.
+
+
+```{r}
+# Suma total de Estimate por variable cuando ha sido significativa
+
+generate_combinations <- function(variables) {
+  n <- length(variables)
+  combinations <- list()
+  for (i in 1:n) {
+    comb <- combn(variables, i)
+    for (j in 1:ncol(comb)) {
+      combinations <- c(combinations, list(comb[, j]))
+    }
+  }
+  combinations
+}
+
+
+count_estimate_vars <- function(dependent_var, independent_vars, data) {
+  combinations <- generate_combinations(independent_vars)
+  num_combinations <- length(combinations)
+  
+  result <- data.frame(variable = character(), count = double(), stringsAsFactors = FALSE)
+  
+  for (i in 1:num_combinations) {
+    comb_vars <- unlist(combinations[[i]])
+    formula <- as.formula(paste(dependent_var, "~", paste(comb_vars, collapse = "+")))
+    model <- plm(formula, data = data, model = "pooling")
+    p_values <- coef(summary(model))[, "Pr(>|t|)"]
+    estimates <- coef(model)
+    
+    for (j in 1:length(comb_vars)) {
+      if (p_values[comb_vars[j]] < 0.05) {
+        if (comb_vars[j] %in% result$variable) {
+          result$count[result$variable == comb_vars[j]] <- result$count[result$variable == comb_vars[j]] + estimates[comb_vars[j]]
+        } else {
+          result <- rbind(result, data.frame(variable = comb_vars[j], count = estimates[comb_vars[j]], stringsAsFactors = FALSE))
+        }
+      }
+    }
+  }
+  
+  # Añadir variable si no ha sido significativa con el número 0
+  missing_vars <- setdiff(independent_vars, result$variable)
+  if (length(missing_vars) > 0) {
+    result <- rbind(result, data.frame(variable = missing_vars, count = 0, stringsAsFactors = FALSE))
+  }
+  
+  # Ordenar el resultado de mayor a menor count
+  result <- result[order(result$count, decreasing = TRUE), ]
+  return(result)
+}
+
+
+dependent_var <- "Difrel_pob"
+independent_vars <- c("Jobs_TT", "Banks_TT", "Shops_TT", "Hosp_TT", "Pharm_TT", "Docs_TT", "PrimS_TT", "SecS_TT", "Stats_TT", "Cine_TT", "emp.pob", "afi.pob")
+
+summary <- count_estimate_vars(dependent_var, independent_vars, datoss)
+
+# Imprimir el resumen
+print(summary)
+```
+PrimS = -74.274827/ 359 = -0,2
+Pharm = -305.682197	 / 1578 = -0,19
+Secs = -98.071603	/ 557 = -0,17
+Banks = -167.734522	 / 1034 = -0,16
+Hosp = -108.510907	 / 769 = -0,14
+Stats = -235.550741	 / 1914 = -0,12
+Cine = -58.449539	 / 668 = -0,08
+Jobs = -78.764599	 / 2020 = -0,03
+emp.pob = -1.612061	/ 54 = -0,01
+afi.pob = 8.363949	 / 2048 = 0,003
+Shops = 23.993638	/ 374 = 0,06
+Docs = 394.248746	/ 2044 = 0,19 
+
+
+
+
+Observamos como los doctores (0'19), las tiendas (0'06) y afiliados a la seguridad social (0'003) se encuentran relacionadas positivamente con el aumento de población a medida que el acceso a estos servicios se vuelve complicado. Las variables de número de empresas (0'01) trabajo (-0'03), cine (-0'087), estaciones (-0'12), hospitales (-0'14), bancos (-0'16), educación secundaria (-0'17), farmacias (-0'19) y escuelas primarias (-0'2) tienen un coeficiente negativo.
+
+
+Estos resultados se interpretan como que conforme el tiempo de acceso a los doctores aumenta un minuto la población aumentará en un 0’19%. Por otra parte, el aumento de afiliados a la seguridad social por persona en un municipio aumenta la población de este en 0'003%. Finalmente, cuando el tiempo de acceso a las escuelas primarias aumenta un minuto, la población desciende un 0’2%.
+
+Los números anteriores son la media del coeficinete total sobre el número de veces que ha sido significativo la variable.
+
+
+
+
+A lo largo de este estudio, y sobre todo en el último apartado, se ha demostrado que existen variables independientes sobre la accesibilidad a servicios básicos que explican la evolución de la población en los distintos municipios de la Comunidad Valenciana.
+
+Explicar que cuando un una variable tiene un número positivo quiere decir que cuando aumenta su valor en una unidad, y el resto de variables se quedan a 0, el crecimiento, en este caso de la variable población porcentual, aumentaría. Por ello, lo que se busca es averiguar qué variables de accesibilidad tienen un efecto negativo, pues eso quiere decir que al aumentar la distancia a esos servicios la población relativa baja. Por tanto, se entiende que son esas variables las que incentiban a la población a establecerse en esa zona.
+
+Los resultados que se pueden extraer es que, por un lado, cuando el tiempo de acceso a tiendas y doctores aumenta la población en un pequeño porcentaje. Esto no tiene mucho sentido porque las personas no buscan alejarse de los doctores y las tiendas. Sin embargo, este tipo de servicios están suplidos en la gran mayoría de lugares, por lo que no debería ser un inconveniente.
+
+Por otro lado, el tiempo de acceso a los trabajos y cines tienen un efecto menor a -0'01 la disminución de la población de un municipio.
+
+En cuanto a los datos del dinamismo económico, el número de empresas no parece afectar al fenómeno de la despoblación, al igual que el número de afiliados a la seguridad social (0'003). Sin embargo, en este último caso es la actividad que más veces ha resultado como variable significativa, por lo que pensar que el número de personas activas es importante en el crecimiento poblacional a través de estos resultados, es una posibilidad.
+
+Por último, el tiempo de acceso a las estaciones, hospitales, bancos, escuelas secundarias, farmacias y escuelas primarias parecen ser las variables de mayor importancia a la hora de aumentar la población, algo que no sorprende pues son servicios a los que se recurre frecuentemente. 
+
+
+Cabe destacar la gran aparición como variables significativas de los trabajos, bancos, farmacias y estaciones, pues si bien de media contribuyen menos con un menor porcentaje que las escuelas primarias, aparecen en muchísimos modelos como variables significativas.
+
